@@ -35,28 +35,34 @@ namespace event_engine
 		return std::atomic_load_explicit((std::atomic<uint64_t> *)&meta_->time_running, std::memory_order_relaxed);
 	}
 
-	std::vector<std::shared_ptr<char>> RingBuffer::Read()
+	std::vector<char *> RingBuffer::Read()
 	{
 		int data_tail = meta_->data_tail;
 		int data_head = std::atomic_load_explicit((std::atomic<uint64_t> *)&meta_->data_head, std::memory_order_acquire);
 		int data_begin, data_end;
-		std::vector<std::shared_ptr<char>> res;
+		std::vector<char *> res; // free manual
 		while (data_tail != data_head)
 		{
 			data_begin = data_tail & data_mask_;
 			data_end = data_head & data_mask_;
 			if (data_end > data_begin)
 			{
-				std::shared_ptr<char> buff(new char[data_end - data_begin], std::default_delete<char[]>());
-				std::memcpy(buff.get(), data_ + data_begin, data_end - data_begin);
-				res.push_back(buff);
+				char *buff = new char[data_end - data_begin];
+				if (buff != nullptr)
+				{
+					std::memcpy(buff, data_ + data_begin, data_end - data_begin);
+					res.push_back(buff);
+				}
 			}
 			else
 			{
-				std::shared_ptr<char> buff(new char[data_size_ - data_begin + data_end], std::default_delete<char[]>());
-				std::memcpy(buff.get(), data_ + data_begin, data_size_ - data_begin);
-				std::memcpy(buff.get(), data_, data_end);
-				res.push_back(buff);
+				char *buff = new char[data_size_ - data_begin + data_end];
+				if (buff != nullptr)
+				{
+					std::memcpy(buff, data_ + data_begin, data_size_ - data_begin);
+					std::memcpy(buff, data_, data_end);
+					res.push_back(buff);
+				}
 			}
 			data_tail = data_head;
 			std::atomic_store_explicit((std::atomic<uint64_t> *)&meta_->data_tail, data_tail, std::memory_order_release);
