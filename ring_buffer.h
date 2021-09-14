@@ -14,7 +14,7 @@ namespace event_engine
 		bool Mmap();
 		void Unmap();
 		uint64_t TimeRunning();
-		std::vector<char *> Read();
+		std::vector<std::pair<int, char *>>  Read();
 
 	private:
 		int fd_;

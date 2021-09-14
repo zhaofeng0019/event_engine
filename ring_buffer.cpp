@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 #include <atomic>
 #include <cstring>
+#include <iostream>
 namespace event_engine
 {
 	bool RingBuffer::Mmap()
@@ -16,7 +17,7 @@ namespace event_engine
 		data_size_ = page_size * pages_;
 		data_mask_ = data_size_ - 1;
 		void *maped = mmap(nullptr, size_, PROT_WRITE | PROT_READ, MAP_SHARED, fd_, 0);
-		if (maped == nullptr)
+		if (maped == MAP_FAILED)
 		{
 			return false;
 		}
@@ -35,12 +36,12 @@ namespace event_engine
 		return std::atomic_load_explicit((std::atomic<uint64_t> *)&meta_->time_running, std::memory_order_relaxed);
 	}
 
-	std::vector<char *> RingBuffer::Read()
+	std::vector<std::pair<int, char *>> RingBuffer::Read()
 	{
 		int data_tail = meta_->data_tail;
 		int data_head = std::atomic_load_explicit((std::atomic<uint64_t> *)&meta_->data_head, std::memory_order_acquire);
 		int data_begin, data_end;
-		std::vector<char *> res; // free manual
+		std::vector<std::pair<int, char *>> res; // free manual
 		while (data_tail != data_head)
 		{
 			data_begin = data_tail & data_mask_;
@@ -51,7 +52,7 @@ namespace event_engine
 				if (buff != nullptr)
 				{
 					std::memcpy(buff, data_ + data_begin, data_end - data_begin);
-					res.push_back(buff);
+					res.push_back(std::pair<int, char *>{data_end - data_begin, buff});
 				}
 			}
 			else
@@ -61,7 +62,7 @@ namespace event_engine
 				{
 					std::memcpy(buff, data_ + data_begin, data_size_ - data_begin);
 					std::memcpy(buff, data_, data_end);
-					res.push_back(buff);
+					res.push_back(std::pair<int, char *>{data_size_ - data_begin + data_end, buff});
 				}
 			}
 			data_tail = data_head;
