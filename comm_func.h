@@ -9,7 +9,7 @@
 
 namespace event_engine
 {
-	int OpenPerfEvent(perf_event_attr *attr, int cpu, int group_fd, unsigned int *flag);
+	int OpenPerfEvent(perf_event_attr *attr, int pid, int cpu, int group_fd, unsigned long flag);
 	int EnablePerfEvent(int fd);
 	int DisablePerfEvent(int fd);
 	int SetPerfFilter(int fd, const std::string &filter);
@@ -21,6 +21,5 @@ namespace event_engine
 	int RemoveProbe(const std::string &group, const std::string &name, bool is_kprobe);
 	int GetTraceEventID(const std::string &name);
 	std::vector<TraceEventField> GetTraceEventFormat(const std::string &group, const std::string &name);
-
 }
 #endif
