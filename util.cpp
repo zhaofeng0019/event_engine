@@ -1,6 +1,6 @@
 #include "util.h"
 #include <sstream>
-#include <cctype>
+#include <cstring>
 namespace event_engine
 {
 	std::vector<std::string> StringSplit(const std::string &content, char delim)
@@ -28,5 +28,15 @@ namespace event_engine
 			end--;
 		}
 		return s.substr(start, end - start + 1);
+	}
+
+	bool SafeMemcpy(void *dst, void *src, const int data_size, int &offset, const int total_size)
+	{
+		if (total_size - offset < data_size)
+		{
+			return false;
+		}
+		std::memcpy(dst, src + offset, data_size);
+		offset += data_size;
 	}
 }
