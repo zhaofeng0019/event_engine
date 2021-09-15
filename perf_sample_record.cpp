@@ -51,7 +51,7 @@ namespace event_engine
         return true;
     }
 
-    bool PerfSampleRecord::Read(char *data_ptr, const int total_size, int &offset, std::map<uint64_t, perf_event_attr> attr_map)
+    bool PerfSampleRecord::Read(char *data_ptr, const int total_size, int &offset, std::map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr)
     {
         int sample_end;
         std::map<uint64_t, perf_event_attr>::iterator it;
@@ -64,19 +64,28 @@ namespace event_engine
 
         sample_end = offset + header_.size - sizeof(header_);
 
-        if (!SafeMemcpy(&sample_id_, data_ptr, sizeof(sample_id_), offset, total_size))
+        if (default_attr != nullptr)
         {
-            goto fail_end;
+            attr = *default_attr;
         }
-
-        it = attr_map.find(sample_id_);
-
-        if (it == attr_map.end())
+        else
         {
-            goto fail_end;
-        }
+            if (!SafeMemcpy(&sample_id_, data_ptr, sizeof(sample_id_), offset, total_size))
+            {
+                goto fail_end;
+            }
+            it = attr_map.find(sample_id_);
 
-        attr = it->second;
+            if (it == attr_map.end())
+            {
+                goto fail_end;
+            }
+            attr = it->second;
+            if (!(attr.sample_type & PERF_SAMPLE_IDENTIFIER))
+            {
+                goto fail_end;
+            }
+        }
 
         if ((attr.sample_type & PERF_SAMPLE_IP) && (!SafeMemcpy(&ip_, data_ptr, sizeof(ip_), offset, total_size)))
         {
@@ -141,19 +150,19 @@ namespace event_engine
             }
         }
 
-        if ((attr.sample_type & PERF_SAMPLE_RAW) && !(SafeMemcpy(&raw_data_size_, data_ptr, sizeof(raw_data_size_), offset, total_size)))
+        if ((attr.sample_type & PERF_SAMPLE_RAW))
         {
-            goto fail_end;
+            if (!SafeMemcpy(&raw_data_size_, data_ptr, sizeof(raw_data_size_), offset, total_size))
+            {
+                goto fail_end;
+            }
+            if (offset + raw_data_size_ > sample_end)
+            {
+                goto fail_end;
+            }
+            raw_data_ = data_ptr + offset;
+            offset += raw_data_size_;
         }
-
-        if (offset + raw_data_size_ > sample_end)
-        {
-            goto fail_end;
-        }
-
-        raw_data_ = data_ptr + offset;
-
-        offset += raw_data_size_;
 
         if (attr.sample_type & PERF_SAMPLE_BRANCH_STACK)
         {

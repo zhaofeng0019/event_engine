@@ -63,7 +63,7 @@ namespace event_engine
         uint64_t intr_abi_;
         std::vector<uint64_t> intr_regs_;
 
-        bool Read(char *data_ptr, const int total_size, int &offset, std::map<uint64_t, perf_event_attr> attr_map);
+        bool Read(char *data_ptr, const int total_size, int &offset, std::map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr);
     };
 
 }
