@@ -36,7 +36,7 @@ namespace event_engine
         {
             return false;
         }
-        std::memcpy(dst, src + offset, data_size);
+        std::memcpy(dst, (char *)src + offset, data_size);
         offset += data_size;
         return true;
     }
