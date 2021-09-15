@@ -1,5 +1,6 @@
 #include "comm_func.h"
 #include <sys/syscall.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <fstream>
@@ -10,27 +11,43 @@
 namespace event_engine
 {
 
-    int OpenPerfEvent(perf_event_attr *attr, int pid, int cpu, int group_fd, unsigned long flags)
+    int OpenPerfEvent(perf_event_attr *attr, int pid, int cpu, int group_fd, unsigned long flags, std::string &err)
     {
         int res = syscall(SYS_perf_event_open, attr, pid, cpu, group_fd, flags);
+        if (res < 0)
+        {
+            err = strerror(errno);
+        }
         return res;
     }
 
-    int EnablePerfEvent(int fd)
+    int EnablePerfEvent(int fd, std::string &err)
     {
         int res = ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+        if (res < 0)
+        {
+            err = strerror(errno);
+        }
         return res;
     }
 
-    int DisablePerfEvent(int fd)
+    int DisablePerfEvent(int fd, std::string &err)
     {
         int res = ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+        if (res < 0)
+        {
+            err = strerror(errno);
+        }
         return res;
     }
 
-    int SetPerfFilter(int fd, const std::string &filter)
+    int SetPerfFilter(int fd, const std::string &filter, std::string &err)
     {
         int res = ioctl(fd, PERF_EVENT_IOC_SET_FILTER, filter.c_str());
+        if (res < 0)
+        {
+            err = strerror(errno);
+        }
         return res;
     }
 
@@ -68,10 +85,13 @@ namespace event_engine
         {
             if (m.filesystem_type_ == "debugfs")
             {
-                if (m.mount_point_.substr(0, sizeof("/sys/kernel/debug") - 1) == "/sys/kernel/debug")
+                std::string path = m.mount_point_ + "/tracing";
+                struct stat st_buff;
+                if (stat((path + "/events").c_str(), &st_buff) < 0 || !S_ISDIR(st_buff.st_mode))
                 {
-                    return "/sys/kernel/debug/tracing";
+                    continue;
                 }
+                return path;
             }
         }
         return "";
@@ -96,51 +116,55 @@ namespace event_engine
         return "";
     }
 
-    int WriteTraceCommand(const std::string &name, const std::string &cmd)
+    int WriteTraceCommand(const std::string &relative_path, const std::string &cmd, std::string &err)
     {
-        std::string path = TracingDir() + "/" + name;
+        std::string path = TracingDir() + "/" + relative_path;
         int fd = open(path.c_str(), O_WRONLY | O_APPEND);
         if (fd == -1)
         {
-            return errno;
+            err = strerror(errno);
+            return -1;
         }
         auto s = write(fd, cmd.c_str(), cmd.size());
         close(fd);
         if (s == -1)
         {
-            return errno;
+            err = strerror(errno);
+            return -1;
         }
         return 0;
     }
 
-    int AddProbe(const std::string &group, const std::string &name, const std::string &address /* uprobe may like /bin/bash:0x01 kprobe may like sys_open:0x01*/, const std::string &output, bool on_return, bool is_kprobe)
+    int AddProbe(const std::string &group, const std::string &name, const std::string &address, const std::string &output, bool on_return, bool is_kprobe, std::string &err)
     {
         std::string cmd = on_return ? "r:" : "p:";
         cmd += group + "/" + name + " ";
         cmd += address + " ";
         cmd += output;
-        return WriteTraceCommand(is_kprobe ? "kprobe_events" : "uprobe_events", cmd);
+        return WriteTraceCommand(is_kprobe ? "kprobe_events" : "uprobe_events", cmd, err);
     }
 
-    int RemoveProbe(const std::string &group, const std::string &name, bool is_kprobe)
+    int RemoveProbe(const std::string &group, const std::string &name, bool is_kprobe, std::string &err)
     {
-        return WriteTraceCommand(is_kprobe ? "kprobe_events" : "uprobe_events", "-:" + group + "/" + name);
+        return WriteTraceCommand(is_kprobe ? "kprobe_events" : "uprobe_events", "-:" + group + "/" + name, err);
     }
 
-    int GetTraceEventID(const std::string &name)
+    int GetTraceEventID(const std::string &name, std::string &err)
     {
         std::string file = TracingDir() + "/events/" + name + "/id";
         int fd = open(file.c_str(), O_RDONLY);
         if (fd == -1)
         {
-            return errno;
+            err = strerror(errno);
+            return -1;
         }
         char buff[8] = {0};
         int n = read(fd, buff, 6);
         close(fd);
         if (n == -1)
         {
-            return errno;
+            err = strerror(errno);
+            return -1;
         }
         int i = 0;
         for (; '0' <= buff[i] && buff[i] <= '9' && i < 6; i++)
@@ -150,7 +174,8 @@ namespace event_engine
         int id = std::atoi(buff);
         if (errno == ERANGE)
         {
-            return errno;
+            err = strerror(errno);
+            return -1;
         }
         return id;
     }

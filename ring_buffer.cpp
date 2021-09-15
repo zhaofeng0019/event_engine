@@ -4,12 +4,14 @@
 #include <atomic>
 #include <cstring>
 #include <iostream>
+#include <errno.h>
 namespace event_engine
 {
-    bool RingBuffer::Mmap()
+    bool RingBuffer::Mmap(std::string &err)
     {
         if (pages_ & (pages_ - 1) != 0) // pages not pow of 2
         {
+            err = strerror(errno);
             return false;
         }
         int page_size = getpagesize();
@@ -19,6 +21,7 @@ namespace event_engine
         void *maped = mmap(nullptr, size_, PROT_WRITE | PROT_READ, MAP_SHARED, fd_, 0);
         if (maped == MAP_FAILED)
         {
+            err = strerror(errno);
             return false;
         }
         data_ = (char *)maped + page_size;

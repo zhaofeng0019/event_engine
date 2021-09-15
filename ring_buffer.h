@@ -11,7 +11,7 @@ namespace event_engine
     public:
         RingBuffer(int fd, int pages) : fd_(fd), pages_(pages){};
         ~RingBuffer(){};
-        bool Mmap();
+        bool Mmap(std::string &err);
         void Unmap();
         uint64_t TimeRunning();
         std::vector<std::pair<int, char *>> Read();
