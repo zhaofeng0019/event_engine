@@ -21,6 +21,16 @@ namespace event_engine
         return res;
     }
 
+    int GetStreamId(int fd, std::string &err)
+    {
+        int value{0};
+        if (ioctl(fd, PERF_EVENT_IOC_ID, &value) < 0)
+        {
+            err = strerror(errno);
+        }
+        return value;
+    }
+
     int EnablePerfEvent(int fd, std::string &err)
     {
         int res = ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
