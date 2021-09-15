@@ -43,18 +43,14 @@ namespace event_engine
             }
         }
         auto name_parts = StringSplit(name, ' ');
+        name_ = name_parts[name_parts.size() - 1];
         if (name.substr(0, sizeof("__data_loc") - 1) == "__data_loc")
         {
             data_loc_size_ = size_;
-            if (name_parts.size() < 2 || name_parts[name_parts.size() - 2] != "char[]")
+            if ((data_loc_size_ != 4 && data_loc_size_ != 8) || name_parts.size() < 2 || name_parts[name_parts.size() - 2] != "char[]")
             {
                 return false;
             }
-            name_ = name_parts[name_parts.size() - 1];
-        }
-        else
-        {
-            name_ = name_parts[name_parts.size() - 1];
         }
         return true;
     }
