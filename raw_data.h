@@ -5,14 +5,14 @@
 #include "trace_event_field.h"
 namespace event_engine
 {
+    struct FieldData
+    {
+        std::string name_;
+        int size_{0};
+        char *ptr_{nullptr};
+    };
     class RawData
     {
-        struct FieldData
-        {
-            std::string name_;
-            int size_{0};
-            char *ptr_{nullptr};
-        };
         std::vector<FieldData> fields_;
         void Parse(std::vector<TraceEventField> &trace_fields, char *data_ptr, const int total_size);
     };
