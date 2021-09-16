@@ -1,5 +1,6 @@
 #include "perf_sample_record.h"
 #include "util.h"
+#include "comm_func.h"
 #include <cstring>
 namespace event_engine
 {
@@ -51,10 +52,16 @@ namespace event_engine
         return true;
     }
 
-    bool PerfSampleRecord::Read(char *data_ptr, const int total_size, int &offset, std::map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr)
+    void Decoder::DecoderFromEvent(std::string group, std::string name, std::function<void(void *)> fn, std::string &err)
+    {
+        fields_ = GetTraceEventFormat(group, name, err);
+        handler_ = fn;
+    }
+
+    bool PerfSampleRecord::Read(char *data_ptr, const int total_size, int &offset, std::unordered_map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr, std::unordered_map<uint64_t, Decoder> decoder_map)
     {
         int sample_end;
-        std::map<uint64_t, perf_event_attr>::iterator it;
+        std::unordered_map<uint64_t, perf_event_attr>::iterator it;
         perf_event_attr attr;
 
         if (!SafeMemcpy(&header_, data_ptr, sizeof(header_), offset, total_size))
@@ -160,8 +167,18 @@ namespace event_engine
             {
                 goto fail_end;
             }
-            raw_data_ = data_ptr + offset;
+            raw_data_ptr_ = data_ptr + offset;
             offset += raw_data_size_;
+            auto it = decoder_map.find(stream_id_);
+            if (it != decoder_map.end())
+            {
+                raw_data_.Parse(it->second.fields_, raw_data_ptr_, raw_data_size_);
+                handler_ = it->second.handler_;
+            }
+            else
+            {
+                goto fail_end;
+            }
         }
 
         if (attr.sample_type & PERF_SAMPLE_BRANCH_STACK)

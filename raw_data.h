@@ -13,6 +13,7 @@ namespace event_engine
     };
     class RawData
     {
+    public:
         std::vector<FieldData> fields_;
         void Parse(std::vector<TraceEventField> &trace_fields, char *data_ptr, const int total_size);
     };
