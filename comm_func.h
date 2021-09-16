@@ -21,6 +21,6 @@ namespace event_engine
     int AddProbe(const std::string &group, const std::string &name, const std::string &address /* uprobe may like /bin/bash:0x01 kprobe may like sys_open:0x01*/, const std::string &output, bool on_return, bool is_kprobe, std::string &err);
     int RemoveProbe(const std::string &group, const std::string &name, bool is_kprobe);
     int GetTraceEventID(const std::string &name, std::string &err);
-    std::vector<TraceEventField> GetTraceEventFormat(const std::string &group, const std::string &name);
+    std::vector<TraceEventField> GetTraceEventFormat(const std::string &group, const std::string &name, std::string &err);
 }
 #endif

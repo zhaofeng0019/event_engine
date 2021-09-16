@@ -190,7 +190,7 @@ namespace event_engine
         return id;
     }
 
-    std::vector<TraceEventField> GetTraceEventFormat(const std::string &group, const std::string &name)
+    std::vector<TraceEventField> GetTraceEventFormat(const std::string &group, const std::string &name, std::string &err)
     {
         std::vector<TraceEventField> res;
         std::string file = TracingDir() + "/events/" + group + "/" + name + "/" + "format";
@@ -198,6 +198,7 @@ namespace event_engine
         fin.open(file);
         if (!fin.is_open())
         {
+            err = strerror(errno);
             return res;
         }
         char buff[1024] = {0};
