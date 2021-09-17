@@ -7,11 +7,16 @@
 #include <errno.h>
 namespace event_engine
 {
+    void RingBuffer::SetTimeOffset(uint64_t offset)
+    {
+        timeOffset_ = offset;
+    }
+
     bool RingBuffer::Mmap(std::string &err)
     {
         if (pages_ & (pages_ - 1) != 0) // pages not pow of 2
         {
-            err = strerror(errno);
+            err = "pages not pow of 2";
             return false;
         }
         int page_size = getpagesize();
