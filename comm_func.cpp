@@ -11,9 +11,9 @@
 namespace event_engine
 {
 
-    int OpenPerfEvent(perf_event_attr *attr, int pid, int cpu, int group_fd, unsigned long flags, std::string &err)
+    int OpenPerfEvent(perf_event_attr *attr, int pid_or_fd, int cpu, int group_fd, unsigned long flags, std::string &err)
     {
-        int res = syscall(SYS_perf_event_open, attr, pid, cpu, group_fd, flags);
+        int res = syscall(SYS_perf_event_open, attr, pid_or_fd, cpu, group_fd, flags);
         if (res < 0)
         {
             err = strerror(errno);
@@ -159,36 +159,36 @@ namespace event_engine
         return WriteTraceCommand(is_kprobe ? "kprobe_events" : "uprobe_events", "-:" + group + "/" + name, err);
     }
 
-    // int GetTraceEventID(const std::string &name, std::string &err)
-    // {
-    //     std::string file = TracingDir() + "/events/" + name + "/id";
-    //     int fd = open(file.c_str(), O_RDONLY);
-    //     if (fd == -1)
-    //     {
-    //         err = strerror(errno);
-    //         return -1;
-    //     }
-    //     char buff[8] = {0};
-    //     int n = read(fd, buff, 6);
-    //     close(fd);
-    //     if (n == -1)
-    //     {
-    //         err = strerror(errno);
-    //         return -1;
-    //     }
-    //     int i = 0;
-    //     for (; '0' <= buff[i] && buff[i] <= '9' && i < 6; i++)
-    //     {
-    //     }
-    //     buff[i] = 0;
-    //     int id = std::atoi(buff);
-    //     if (errno == ERANGE)
-    //     {
-    //         err = strerror(errno);
-    //         return -1;
-    //     }
-    //     return id;
-    // }
+    int GetTraceEventID(const std::string &group, const std::string &name, std::string &err)
+    {
+        std::string file = TracingDir() + "/events/" + group + "/" + name + "/id";
+        int fd = open(file.c_str(), O_RDONLY);
+        if (fd == -1)
+        {
+            err = strerror(errno);
+            return -1;
+        }
+        char buff[8] = {0};
+        int n = read(fd, buff, 6);
+        close(fd);
+        if (n == -1)
+        {
+            err = strerror(errno);
+            return -1;
+        }
+        int i = 0;
+        for (; '0' <= buff[i] && buff[i] <= '9' && i < 6; i++)
+        {
+        }
+        buff[i] = 0;
+        int id = std::atoi(buff);
+        if (errno == ERANGE)
+        {
+            err = strerror(errno);
+            return -1;
+        }
+        return id;
+    }
 
     std::vector<TraceEventField> GetTraceEventFormat(const std::string &group, const std::string &name, std::string &err)
     {
