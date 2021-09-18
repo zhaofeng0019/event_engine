@@ -74,6 +74,7 @@ namespace event_engine
         std::function<void(void *)> handler_{nullptr};
         RawData raw_data_;
         bool Read(char *data_ptr, const int total_size, int &offset, std::unordered_map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr, std::unordered_map<uint64_t, Decoder> decoder_map);
+        bool operator<(const PerfSampleRecord &other) const;
     };
 
 }

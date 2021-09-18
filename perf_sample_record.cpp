@@ -215,5 +215,10 @@ namespace event_engine
     fail_end:
         offset = sample_end;
         return false;
-    };
+    }
+
+    bool PerfSampleRecord::operator<(const PerfSampleRecord &other) const
+    {
+        return time_ < other.time_;
+    }
 }
