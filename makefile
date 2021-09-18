@@ -5,9 +5,11 @@ cc = g++
 flag = -g
 
 build: $(obj)
+	$(cc) $(flag) -o a.out $(obj) -lpthread
+
 
 $(obj) : %.o : %.cpp
 	$(cc) -c $(flag) $< -o $@
 
 clean:
-	rm -rf *.o *.out
+	rm -rf *.o *.out obj/*.o
