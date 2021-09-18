@@ -7,6 +7,14 @@
 #include <errno.h>
 namespace event_engine
 {
+    RingBuffer::RingBuffer()
+    {
+    }
+
+    RingBuffer::RingBuffer(int fd, uint32_t pages) : fd_{fd}, pages_(pages)
+    {
+    }
+
     void RingBuffer::SetTimeOffset(uint64_t offset)
     {
         timeOffset_ = offset;
@@ -46,6 +54,11 @@ namespace event_engine
 
     std::vector<std::pair<int, char *>> RingBuffer::Read()
     {
+        if (data_ == nullptr)
+        {
+            return std::vector<std::pair<int, char *>>();
+        }
+
         int data_tail = meta_->data_tail;
         int data_head = std::atomic_load_explicit((std::atomic<uint64_t> *)&meta_->data_head, std::memory_order_acquire);
         int data_begin, data_end;

@@ -9,23 +9,26 @@ namespace event_engine
     class RingBuffer
     {
     public:
-        RingBuffer(int fd, uint pages) : fd_(fd), pages_(pages){};
-        ~RingBuffer(){};
-        bool Mmap(std::string &err);
-        void Unmap();
-        uint64_t TimeRunning();
-        std::vector<std::pair<int, char *>> Read();
-        void SetTimeOffset(uint64_t offset);
+        int fd_{0};
+        uint32_t pages_{0};
 
     private:
-        int fd_{0};
-        uint pages_{0};
         int size_{0};
         int data_size_{0};
         int data_mask_{0};
         char *data_{nullptr};
         uint64_t timeOffset_{0};
         perf_event_mmap_page *meta_{nullptr};
+
+    public:
+        RingBuffer();
+        RingBuffer(int fd, uint32_t pages);
+        ~RingBuffer(){};
+        bool Mmap(std::string &err);
+        void Unmap();
+        uint64_t TimeRunning();
+        std::vector<std::pair<int, char *>> Read();
+        void SetTimeOffset(uint64_t offset);
     };
 }
 #endif
