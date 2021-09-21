@@ -1,6 +1,7 @@
 #ifndef EVENT_ENGINE_RAW_DATA_INC_
 #define EVENT_ENGINE_RAW_DATA_INC_
 #include <unordered_map>
+#include <vector>
 #include <string>
 #include "trace_event_field.h"
 namespace event_engine

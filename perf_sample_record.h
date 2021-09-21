@@ -41,7 +41,7 @@ namespace event_engine
     {
     public:
         std::vector<TraceEventField> fields_;
-        std::function<void(void *)> handler_; /* PerfSampleRecord */
+        std::function<void(void *)> handle_; /* PerfSampleRecord */
         void DecoderFromEvent(std::string group, std::string name, std::function<void(void *)> fn, std::string &err);
     };
     class PerfSampleRecord
@@ -71,7 +71,7 @@ namespace event_engine
         uint64_t transaction_{0};
         uint64_t intr_abi_{0};
         std::vector<uint64_t> intr_regs_;
-        std::function<void(void *)> handler_{nullptr};
+        std::function<void(void *)> handle_{nullptr};
         RawData raw_data_;
         bool Read(char *data_ptr, const int total_size, int &offset, std::unordered_map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr, std::unordered_map<uint64_t, Decoder> decoder_map);
         bool operator<(const PerfSampleRecord &other) const;

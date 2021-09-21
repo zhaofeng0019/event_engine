@@ -55,7 +55,7 @@ namespace event_engine
     void Decoder::DecoderFromEvent(std::string group, std::string name, std::function<void(void *)> fn, std::string &err)
     {
         fields_ = GetTraceEventFormat(group, name, err);
-        handler_ = fn;
+        handle_ = fn;
     }
 
     bool PerfSampleRecord::Read(char *data_ptr, const int total_size, int &offset, std::unordered_map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr, std::unordered_map<uint64_t, Decoder> decoder_map)
@@ -180,7 +180,7 @@ namespace event_engine
             if (it != decoder_map.end())
             {
                 raw_data_.Parse(it->second.fields_, raw_data_ptr_, raw_data_size_);
-                handler_ = it->second.handler_;
+                handle_ = it->second.handle_;
             }
             else
             {
