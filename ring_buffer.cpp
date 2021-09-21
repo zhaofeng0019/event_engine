@@ -44,7 +44,7 @@ namespace event_engine
 
     void RingBuffer::Unmap()
     {
-        munmap((void *)data_, size_);
+        munmap((void *)meta_, size_);
     }
 
     uint64_t RingBuffer::TimeRunning()
