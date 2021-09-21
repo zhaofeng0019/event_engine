@@ -63,17 +63,19 @@ namespace event_engine
         int sample_end;
         std::unordered_map<uint64_t, perf_event_attr>::iterator it;
         perf_event_attr attr;
-
         if (!SafeMemcpy(&header_, data_ptr, sizeof(header_), offset, total_size))
         {
             return false;
         }
-
         sample_end = offset + header_.size - sizeof(header_);
 
         if (default_attr != nullptr)
         {
             attr = *default_attr;
+            if ((attr.sample_type & PERF_SAMPLE_IDENTIFIER) && !SafeMemcpy(&sample_id_, data_ptr, sizeof(sample_id_), offset, total_size))
+            {
+                goto fail_end;
+            }
         }
         else
         {
@@ -115,6 +117,11 @@ namespace event_engine
         }
 
         if ((attr.sample_type & PERF_SAMPLE_ID) && (!SafeMemcpy(&id_, data_ptr, sizeof(id_), offset, total_size)))
+        {
+            goto fail_end;
+        }
+
+        if ((attr.sample_type & PERF_SAMPLE_STREAM_ID) && (!SafeMemcpy(&stream_id_, data_ptr, sizeof(stream_id_), offset, total_size)))
         {
             goto fail_end;
         }
@@ -163,13 +170,13 @@ namespace event_engine
             {
                 goto fail_end;
             }
-            if (offset + raw_data_size_ > sample_end)
+            if (offset - sizeof(raw_data_size_) + raw_data_size_ > sample_end)
             {
                 goto fail_end;
             }
             raw_data_ptr_ = data_ptr + offset;
             offset += raw_data_size_;
-            auto it = decoder_map.find(stream_id_);
+            auto it = decoder_map.find(sample_id_);
             if (it != decoder_map.end())
             {
                 raw_data_.Parse(it->second.fields_, raw_data_ptr_, raw_data_size_);

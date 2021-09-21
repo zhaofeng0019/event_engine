@@ -60,7 +60,7 @@ namespace event_engine
         uint64_t period_{0};
         SampleReadFormat read_format_;
         std::vector<uint64_t> ips_;
-        uint64_t raw_data_size_{0};
+        uint32_t raw_data_size_{0};
         char *raw_data_ptr_{nullptr};
         std::vector<BranchEntry> branches_;
         uint64_t user_abi_{0};
