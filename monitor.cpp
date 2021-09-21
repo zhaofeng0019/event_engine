@@ -7,17 +7,15 @@
 #include <chrono>
 #include <iostream>
 #include <cstdio>
+#include <algorithm>
 namespace event_engine
 {
     const int ATTR_SIZE{64};
 
-    Monitor::Monitor(MonitorOption &option, std::string &err)
+    bool Monitor::Init(MonitorOption option, std::string &err)
     {
+        loop_err_handle_ = option.loop_err_handle_;
         cpus_ = sysconf(_SC_NPROCESSORS_ONLN);
-        if (option.ring_buff_page_ == 0)
-        {
-            option.ring_buff_page_ = 1024;
-        }
         if (option.cgroup_.size() != 0)
         {
             /* cgroup */
@@ -46,10 +44,10 @@ namespace event_engine
                     goto fail;
                 }
             }
-            return;
+            return true;
         }
 
-        if (option.cgroup_all_)
+        if (option.all_events_)
         {
             option.pids_.clear();
             option.pids_.push_back(-1);
@@ -62,14 +60,14 @@ namespace event_engine
                 goto fail;
             }
         }
-        return;
+        return true;
     fail:
         if (err == "")
         {
             err = errno == 0 ? "monitor init fail" : strerror(errno);
         }
         ClearCgroupAndGroupFd();
-        return;
+        return false;
     }
 
     bool Monitor::Start(std::string &err)
@@ -77,8 +75,20 @@ namespace event_engine
         stop_fd_ = eventfd(0, 0);
         done_fd_ = eventfd(0, 0);
 
-        /* do some init */
+        poll_fd_ = new pollfd[group_.size() + 1];
 
+        for (int i = 0; i < group_.size(); i++)
+        {
+            poll_fd_[i].fd = group_[i].group_fd_;
+            poll_fd_[i].events = POLLIN;
+        }
+        poll_fd_[group_.size()].fd = stop_fd_;
+        poll_fd_[group_.size()].events = POLLIN;
+        is_running_ = true;
+        if (!EnableAll(err))
+        {
+            return false;
+        }
         std::thread t(&Monitor::RunLoop, this);
         t.detach();
         return true;
@@ -86,19 +96,99 @@ namespace event_engine
 
     void Monitor::RunLoop(void)
     {
-        is_running_ = true;
         while (true)
         {
-            int n = poll(poll_fd_, 1, -1);
-            if (poll_fd_[0].events & POLLIN)
+            int n = poll(poll_fd_, group_.size() + 1, -1);
+            if (n == 0)
             {
-                /* stop */
-                break;
+                continue;
+            }
+            if (n < 0 && errno != EINTR)
+            {
+                loop_err_ = strerror(errno);
+                goto out_loop;
+            }
+
+            if (poll_fd_[group_.size()].revents & POLLIN)
+            {
+                /*stop eventfd read for stop */
+                goto out_loop;
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(lock_);
+                std::vector<PerfSampleRecord> sample_records;
+                std::vector<char *> ptrs;
+                for (int i = 0; i < group_.size(); i++)
+                {
+                    if ((poll_fd_[i].revents & (!POLLIN)))
+                    {
+                        char err_buff[128]{0};
+                        std::sprintf(err_buff, "fd %d cpu %d err revents type %d", group_[i].group_fd_, group_[i].cpu, poll_fd_[i].revents);
+                        loop_err_ = err_buff;
+                        goto out_loop;
+                    }
+
+                    if (!(poll_fd_[i].revents & POLLIN))
+                    {
+                        continue;
+                    }
+                    auto record_ptrs = group_[i].RingBuffer_.Read();
+                    for (auto record_ptr : record_ptrs)
+                    {
+                        ptrs.push_back(record_ptr.second);
+                        int offset = 0;
+                        while (true)
+                        {
+                            PerfSampleRecord sample_record;
+                            if (!sample_record.Read(record_ptr.second, record_ptr.first, offset, stream_id_attr_map_, nullptr, stream_id_decoder_map_))
+                            {
+                                break;
+                            }
+                            sample_record.time_ += group_[i].RingBuffer_.GetTimeOffset();
+                            sample_records.push_back(sample_record);
+                        }
+                    }
+                }
+                std::sort(sample_records.begin(), sample_records.end());
+                for (auto &sample_record : sample_records)
+                {
+                    if (sample_record.handle_ != nullptr)
+                    {
+                        sample_record.handle_(&sample_record); /*ptr are safe  only in handle */
+                    }
+                }
+
+                for (auto ptr : ptrs)
+                {
+                    /* release all the buff malloced before in ringbuffer read */
+                    delete[] ptr;
+                }
             }
         }
+    out_loop:
+        if (loop_err_ != "" && loop_err_handle_ != nullptr)
+        {
+            loop_err_handle_(loop_err_);
+        }
         delete[] poll_fd_;
-        /* do some clear */
+        std::string void_err;
+        DisableAll(void_err);
+        std::vector<uint64_t> probe_ids;
+        {
+            std::lock_guard<std::mutex> lock(lock_);
+            for (auto it : probe_id_fd_map_)
+            {
+                probe_ids.push_back(it.first);
+            }
+        }
+        for (auto id : probe_ids)
+        {
+            RemoveProbeEvent(id, void_err);
+        }
+        ClearCgroupAndGroupFd();
         eventfd_write(done_fd_, 1);
+        is_running_ = false;
     }
 
     void Monitor::Stop()
@@ -107,10 +197,13 @@ namespace event_engine
         {
             return;
         }
-        eventfd_write(stop_fd_, 20);
+        eventfd_write(stop_fd_, 1);
+
         eventfd_t value;
         eventfd_read(done_fd_, &value);
-        return;
+
+        close(stop_fd_);
+        close(done_fd_);
     }
 
     bool Monitor::IsRunning()
@@ -140,20 +233,22 @@ namespace event_engine
                 return false;
             }
 
-            group_.push_back(PerfEventGroup{
-                .pid_or_fd_ = pid_or_fd,
-                .group_fd_ = group_fd,
-                .flag_ = flag,
-                .cpu = cpu,
-            });
-
+            PerfEventGroup perf_group;
+            perf_group.pid_or_fd_ = pid_or_fd;
+            perf_group.group_fd_ = group_fd;
+            perf_group.cpu = cpu;
+            perf_group.flag_ = flag;
             RingBuffer ring_buffer(group_fd, ring_buffer_page);
             if (!ring_buffer.Mmap(err))
             {
+                close(group_fd);
                 return false;
             }
-            ring_buffer_map_[group_fd] = ring_buffer;
-            if (!CpuTimeOffset(cpu, group_fd, ring_buffer, err))
+            perf_group.RingBuffer_ = ring_buffer;
+
+            group_.push_back(perf_group);
+
+            if (!CpuTimeOffset(cpu, group_fd, group_[group_.size() - 1].RingBuffer_, err))
             {
                 return false;
             }
@@ -163,9 +258,10 @@ namespace event_engine
 
     void Monitor::ClearCgroupAndGroupFd()
     {
-        for (auto group : group_)
+        for (auto &group : group_)
         {
             close(group.group_fd_);
+            group.RingBuffer_.Unmap();
         }
 
         group_.clear();
@@ -174,13 +270,7 @@ namespace event_engine
         {
             close(fd);
         }
-
         cgroup_fd_.clear();
-        for (auto it : ring_buffer_map_)
-        {
-            it.second.Unmap();
-        }
-        ring_buffer_map_.clear();
     }
 
     bool Monitor::CpuTimeOffset(int cpu, int group_fd, RingBuffer &ring_buffer, std::string &err)
@@ -228,7 +318,7 @@ namespace event_engine
                 goto fail;
             }
             uint64_t time_offset = std::chrono::system_clock::now().time_since_epoch().count() - ring_buffer.TimeRunning() - record.time_;
-            ring_buffer.SetTimeOffset(offset);
+            ring_buffer.SetTimeOffset(time_offset);
             for (auto buff : buffs)
             {
                 delete[] buff.second;
@@ -249,13 +339,13 @@ namespace event_engine
         if (it == probe_id_fd_map_.end())
         {
             char buff[64]{0};
-            std::sprintf(buff, "probe_id %d no found", probe_id);
+            std::sprintf(buff, "probe_id %ld no found", probe_id);
             err = std::string(buff);
             return false;
         }
         for (auto fd : it->second)
         {
-            if (!EnablePerfEvent(fd, err))
+            if (EnablePerfEvent(fd, err) < 0)
             {
                 return false;
             }
@@ -270,13 +360,13 @@ namespace event_engine
         if (it == probe_id_fd_map_.end())
         {
             char buff[64]{0};
-            std::sprintf(buff, "probe_id %d no found", probe_id);
+            std::sprintf(buff, "probe_id %ld no found", probe_id);
             err = std::string(buff);
             return false;
         }
         for (auto fd : it->second)
         {
-            if (!DisablePerfEvent(fd, err))
+            if (DisablePerfEvent(fd, err) < 0)
             {
                 return false;
             }
@@ -286,7 +376,6 @@ namespace event_engine
 
     bool Monitor::EnableAll(std::string &err)
     {
-        std::lock_guard<std::mutex> lock(lock_);
         for (auto it : probe_id_fd_map_)
         {
             if (!EnableProbe(it.first, err))
@@ -299,7 +388,6 @@ namespace event_engine
 
     bool Monitor::DisableAll(std::string &err)
     {
-        std::lock_guard<std::mutex> lock(lock_);
         for (auto it : probe_id_fd_map_)
         {
             if (!DisableProbe(it.first, err))
@@ -310,16 +398,25 @@ namespace event_engine
         return true;
     }
 
-    uint64_t Monitor::RegisterProbeEvent(ProbeOption &option, std::string &err)
+    uint64_t Monitor::RegisterProbeEvent(ProbeOption option, std::string &err)
     {
         std::lock_guard<std::mutex> lock(lock_);
         if (option.is_dynamic_)
         {
-            if (!AddProbe(option.group_, option.name_, option.address_, option.output_, option.on_return_, option.is_kprobe_, err))
+            std::string void_err;
+            RemoveProbe(option.group_, option.name_, option.is_kprobe_, void_err);
+            if (AddProbe(option.group_, option.name_, option.address_, option.output_, option.on_return_, option.is_kprobe_, err) < 0)
             {
                 return 0;
             }
         }
+
+        auto fields = GetTraceEventFormat(option.group_, option.name_, err);
+        if (err != "")
+        {
+            return 0;
+        }
+
         int event_id = GetTraceEventID(option.group_, option.name_, err);
         if (event_id < 0)
         {
@@ -333,11 +430,11 @@ namespace event_engine
         }
 
         attr.config = event_id;
-        attr.disabled = option.diabled_;
+        attr.disabled = option.disabled_;
         attr.type = PERF_TYPE_TRACEPOINT;
         attr.size = ATTR_SIZE;
         attr.sample_period = 1;
-        attr.sample_type |= PERF_SAMPLE_STREAM_ID | PERF_SAMPLE_IDENTIFIER | PERF_SAMPLE_TIME;
+        attr.sample_type |= (PERF_SAMPLE_STREAM_ID | PERF_SAMPLE_IDENTIFIER | PERF_SAMPLE_TIME | PERF_SAMPLE_RAW | PERF_SAMPLE_TID);
         attr.pinned = false;
         attr.freq = false;
         attr.watermark = true;
@@ -361,11 +458,30 @@ namespace event_engine
                 goto fail;
             }
             stream_ids.push_back(stream_id);
+            if (option.filter_ != "")
+            {
+                if (SetPerfFilter(fd, option.filter_, err) < 0)
+                {
+                    goto fail;
+                }
+            }
         }
 
         probe_id_fd_map_[next_probe_id_] = event_fds;
         probe_id_stream_id_map_[next_probe_id_] = stream_ids;
-        probe_id_dyamic_probe_map_[next_probe_id_] = std::tuple<std::string, std::string, bool>{option.group_, option.name_, option.on_return_};
+        if (option.is_dynamic_)
+        {
+            probe_id_dynamic_probe_map_[next_probe_id_] = std::tuple<std::string, std::string, bool>{option.group_, option.name_, option.is_kprobe_};
+        }
+
+        for (auto stream_id : stream_ids)
+        {
+            stream_id_attr_map_[stream_id] = attr;
+            stream_id_decoder_map_[stream_id] = Decoder{
+                .fields_ = fields,
+                .handle_ = option.decoder_handle_,
+            };
+        }
         return next_probe_id_++;
 
     fail:
@@ -388,7 +504,7 @@ namespace event_engine
         auto it = probe_id_fd_map_.find(probe_id);
         if (it == probe_id_fd_map_.end())
         {
-            std::sprintf(buff, "probe_id %d no found", probe_id);
+            std::sprintf(buff, "probe_id %ld no found", probe_id);
             err = std::string(buff);
             return false;
         }
@@ -397,23 +513,29 @@ namespace event_engine
             close(fd);
         }
 
+        probe_id_fd_map_.erase(it);
+
         for (auto stream_id : probe_id_stream_id_map_[probe_id])
         {
-            stream_id_decoder_map_.erase(stream_id);
+            stream_id_attr_map_.erase(stream_id);
             stream_id_decoder_map_.erase(stream_id);
         }
 
-        auto dynamic_it = probe_id_dyamic_probe_map_.find(probe_id);
-        if (dynamic_it == probe_id_dyamic_probe_map_.end())
+        probe_id_stream_id_map_.erase(probe_id);
+
+        auto dynamic_it = probe_id_dynamic_probe_map_.find(probe_id);
+        if (dynamic_it == probe_id_dynamic_probe_map_.end())
         {
             return true;
         }
+
         auto dynamic_tuple = dynamic_it->second;
         int res = RemoveProbe(std::get<0>(dynamic_tuple), std::get<1>(dynamic_tuple), std::get<2>(dynamic_tuple), err);
         if (res < 0)
         {
             return false;
         }
+
         return true;
     }
 }
