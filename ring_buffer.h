@@ -29,6 +29,7 @@ namespace event_engine
         uint64_t TimeRunning();
         std::vector<std::pair<int, char *>> Read();
         void SetTimeOffset(uint64_t offset);
+        uint64_t GetTimeOffset();
     };
 }
 #endif

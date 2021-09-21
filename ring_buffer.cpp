@@ -92,4 +92,8 @@ namespace event_engine
         }
         return res;
     }
+    uint64_t RingBuffer::GetTimeOffset()
+    {
+        return timeOffset_;
+    }
 }
