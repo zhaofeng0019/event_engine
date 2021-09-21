@@ -41,7 +41,7 @@ namespace event_engine
     {
     public:
         std::vector<TraceEventField> fields_;
-        std::function<void(void *)> handle_; /* PerfSampleRecord */
+        std::function<void(void *)> handle_; /*void* is  PerfSampleRecord*  */
         void DecoderFromEvent(std::string group, std::string name, std::function<void(void *)> fn, std::string &err);
     };
     class PerfSampleRecord
