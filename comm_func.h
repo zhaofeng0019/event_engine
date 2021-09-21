@@ -10,7 +10,7 @@
 namespace event_engine
 {
     int OpenPerfEvent(perf_event_attr *attr, int pid_or_fd, int cpu, int group_fd, unsigned long flag, std::string &err);
-    int GetStreamId(int fd, std::string &err);
+    uint64_t GetStreamId(int fd, std::string &err);
     int EnablePerfEvent(int fd, std::string &err);
     int DisablePerfEvent(int fd, std::string &err);
     int SetPerfFilter(int fd, const std::string &filter, std::string &err);

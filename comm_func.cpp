@@ -21,9 +21,9 @@ namespace event_engine
         return res;
     }
 
-    int GetStreamId(int fd, std::string &err)
+    uint64_t GetStreamId(int fd, std::string &err)
     {
-        int value{0};
+        uint64_t value{0};
         if (ioctl(fd, PERF_EVENT_IOC_ID, &value) < 0)
         {
             err = strerror(errno);
