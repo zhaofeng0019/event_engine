@@ -17,13 +17,17 @@ namespace event_engine
 
     std::string StringTrimSpace(const std::string &s)
     {
+        if (s.size() == 0)
+        {
+            return "";
+        }
         int start = 0;
         int end = s.size() - 1;
         while (start < s.size() && std::isspace(s[start]))
         {
             start++;
         }
-        while (end != 0 && std ::isspace(s[end]))
+        while (end != 0 && std::isspace(s[end]))
         {
             end--;
         }
