@@ -19,12 +19,13 @@ namespace event_engine
                 continue;
             }
             /* data_loc_data */
-            int offset = field.offset_;
+            RawStream raw_stream(data_ptr, total_size);
+            raw_stream.SetOffset(field.offset_);
             if (field.data_loc_size_ == 4) /* {u16 offset, u16 len} */
             {
                 uint16_t data_offset{0};
                 uint16_t data_len{0};
-                if (!SafeMemcpy(&data_offset, data_ptr, 2, offset, total_size) || !SafeMemcpy(&data_len, data_ptr, 2, offset, total_size))
+                if (!raw_stream.Read(&data_offset, 2) || !raw_stream.Read(&data_len, 2))
                 {
                     continue;
                 }
@@ -40,7 +41,7 @@ namespace event_engine
             /* {u32 offset, u32 len} */
             uint32_t data_offset{0};
             uint32_t data_len{0};
-            if (!SafeMemcpy(&data_offset, data_ptr, 4, offset, total_size) || !SafeMemcpy(&data_len, data_ptr, 4, offset, total_size))
+            if (!raw_stream.Read(&data_offset, 4) || !raw_stream.Read(&data_len, 4))
             {
                 continue;
             }

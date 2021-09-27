@@ -34,14 +34,33 @@ namespace event_engine
         return s.substr(start, end - start + 1);
     }
 
-    bool SafeMemcpy(void *dst, void *src, const int data_size, int &offset, const int total_size)
+    RawStream::RawStream(char *ptr, int total_size) : ptr_(ptr), total_size_(total_size)
     {
-        if (total_size - offset < data_size)
+    }
+
+    bool RawStream::Read(void *dst, int data_size)
+    {
+        if (total_size_ - offset_ < data_size)
         {
             return false;
         }
-        std::memcpy(dst, (char *)src + offset, data_size);
-        offset += data_size;
+        std::memcpy(dst, ptr_ + offset_, data_size);
+        offset_ += data_size;
         return true;
+    }
+
+    void RawStream::SetOffset(int offset)
+    {
+        offset_ = offset;
+    }
+
+    int RawStream::GetOffset() const
+    {
+        return offset_;
+    }
+
+    char *RawStream::GetPtr() const
+    {
+        return ptr_;
     }
 }

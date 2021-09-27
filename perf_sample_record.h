@@ -1,6 +1,7 @@
 #ifndef EVENT_ENGINE_PERF_SAMPLE_RECORD_INC_
 #define EVENT_ENGINE_PERF_SAMPLE_RECORD_INC_
 #include "raw_data.h"
+#include "util.h"
 #include <linux/perf_event.h>
 #include <vector>
 #include <cinttypes>
@@ -23,7 +24,7 @@ namespace event_engine
         uint64_t time_running_{0};
         std::vector<value> values_;
 
-        bool Read(char *data_ptr, const int total_size, int &offset, uint64_t format);
+        bool Read(RawStream &raw_stream, uint64_t format);
     };
 
     struct BranchEntry
@@ -73,7 +74,7 @@ namespace event_engine
         std::vector<uint64_t> intr_regs_;
         std::function<void(void *)> handle_{nullptr};
         RawData raw_data_;
-        bool Read(char *data_ptr, const int total_size, int &offset, std::unordered_map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr, std::unordered_map<uint64_t, Decoder> decoder_map);
+        bool Read(RawStream &raw_stream, std::unordered_map<uint64_t, perf_event_attr> attr_map, perf_event_attr *default_attr, std::unordered_map<uint64_t, Decoder> decoder_map);
         bool operator<(const PerfSampleRecord &other) const;
     };
 

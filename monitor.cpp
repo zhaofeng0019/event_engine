@@ -137,11 +137,11 @@ namespace event_engine
                     for (auto record_ptr : record_ptrs)
                     {
                         ptrs.push_back(record_ptr.second);
-                        int offset = 0;
+                        RawStream raw_stream(record_ptr.second, record_ptr.first);
                         while (true)
                         {
                             PerfSampleRecord sample_record;
-                            if (!sample_record.Read(record_ptr.second, record_ptr.first, offset, stream_id_attr_map_, nullptr, stream_id_decoder_map_))
+                            if (!sample_record.Read(raw_stream, stream_id_attr_map_, nullptr, stream_id_decoder_map_))
                             {
                                 break;
                             }
@@ -311,8 +311,8 @@ namespace event_engine
                 goto fail;
             }
             PerfSampleRecord record;
-            int offset{0};
-            if (!record.Read(buffs[0].second, buffs[0].first, offset, stream_id_attr_map_, &refer_attr, stream_id_decoder_map_))
+            RawStream raw_stream(buffs[0].second, buffs[0].first);
+            if (!record.Read(raw_stream, stream_id_attr_map_, &refer_attr, stream_id_decoder_map_))
             {
                 err = "read refer sample err";
                 goto fail;
