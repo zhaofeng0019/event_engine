@@ -7,10 +7,10 @@ flag = -g
 build: $(obj)
 
 $(obj) : %.o : %.cpp
-	$(cc) -c $(flag) $< -o $@
+	$(cc) -c -fPIC $(flag) $< -o $@
 
 example: build 
-	$(cc) $(flag) -o a.out  $(obj) -lpthread
+	$(cc) $(flag) -static -o a.out  $(obj) -Wl,--whole-archive -lrt -lpthread -Wl,--no-whole-archive
 
 clean:
 	rm -rf *.o *.out obj/*.o
