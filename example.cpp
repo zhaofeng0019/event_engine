@@ -13,7 +13,7 @@
 #include <signal.h>
 #include <unistd.h>
 
-class ThreadPoll
+class ThreadPool
 {
     int threads_;
     std::condition_variable cv_;
@@ -25,36 +25,36 @@ class ThreadPoll
 public:
     void Run();
     void AddTask(std::function<void(void)> task);
-    ThreadPoll(int thread);
+    ThreadPool(int thread);
     void Stop();
 };
 
-ThreadPoll::ThreadPoll(int thread) : threads_(thread){};
-void ThreadPoll::Run()
+ThreadPool::ThreadPool(int thread) : threads_(thread){};
+void ThreadPool::Run()
 {
     running_.store(true);
     for (int i = 0; i < threads_; i++)
     {
-        std::thread t(&ThreadPoll::WorkThread, this);
+        std::thread t(&ThreadPool::WorkThread, this);
         t.detach();
     }
 }
 
-void ThreadPoll::AddTask(std::function<void(void)> task)
+void ThreadPool::AddTask(std::function<void(void)> task)
 {
     std::unique_lock<std::mutex> lock(m_);
     task_queue_.push(task);
     cv_.notify_one();
 }
 
-void ThreadPoll::Stop()
+void ThreadPool::Stop()
 {
     running_.store(false);
     cv_.notify_all();
     return;
 }
 
-void ThreadPoll::WorkThread()
+void ThreadPool::WorkThread()
 {
     while (true)
     {
@@ -74,7 +74,7 @@ void ThreadPoll::WorkThread()
     }
 }
 
-ThreadPoll thread_poll(1);
+ThreadPool thread_poll(1);
 event_engine::Monitor m;
 
 struct AcceptEvent
