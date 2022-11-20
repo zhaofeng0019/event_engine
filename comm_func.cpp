@@ -68,10 +68,10 @@ namespace event_engine
         fin.open("/proc/self/mountinfo");
         if (!fin.is_open())
         {
-            std::cerr << "fatal: can't open mount file /proc/self/mountinf" << std::endl;
+            std::cerr << "fatal: can't open mount file /proc/self/mountinfo" << std::endl;
             exit(errno);
         }
-        char buff[1024]{0};
+        char buff[1024*1024]{0};
         while (fin.getline(buff, sizeof(buff)))
         {
             MountInfo info;
